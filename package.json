@@ -2,14 +2,19 @@
   "name": "scallybot",
   "version": "1.0.0",
   "description": "Raid organizing bot for Scallywags Guild",
-  "main": "app.js",
+  "main": "bot.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node bot.js"
   },
   "author": "Matt Huberty",
   "license": "MIT",
   "dependencies": {
-    "discord.io": "^2.5.3",
+    "discord.io": "github:woor/discord.io#gateway_v6",
+    "pg": "^7.4.3",
     "winston": "^3.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^1.18.4"
   }
 }
