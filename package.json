@@ -10,8 +10,11 @@
   "author": "Matt Huberty",
   "license": "MIT",
   "dependencies": {
-    "discord.io": "github:woor/discord.io#gateway_v6",
+    "chrono-node": "^1.3.5",
+    "dateformat": "^3.0.3",
+    "discord.js": "^11.4.2",
     "pg": "^7.4.3",
+    "s": "^0.1.1",
     "winston": "^3.1.0"
   },
   "devDependencies": {

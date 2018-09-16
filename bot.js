@@ -1,5 +1,7 @@
-const Discord = require('discord.io');
+const Discord = require('discord.js');
 const logger = require('winston');
+const chrono = require('chrono-node');
+const dateFormat = require('dateformat');
 const auth = require('./auth.json');
 const { Client } = require('pg');
 
@@ -11,7 +13,28 @@ const client = new Client({
     port: 5432
 });
 
-client.connect();
+if (false) {
+    client.query('Insert into test(name,message) VALUES($1,$2);', [user, msg], (err, res) => {
+        if (err) {
+            bot.sendMessage({
+                to: channelID,
+                message: 'Sorry. Something went wrong. Blame Juicey.'
+            });
+            logger.error(err.stack);
+        } else {
+            logger.debug(`Stored ${msg} from ${userID}`);
+            // logger.debug(res.rows[0]);
+        }
+    });
+}
+
+client.connect((err) => {
+    if (err) {
+        logger.error(err);
+    } else {
+        console.log('Connected to Postgres!');
+    }
+});
 
 // Logger settings
 logger.remove(logger.transports.Console);
@@ -20,99 +43,213 @@ logger.add(new logger.transports.Console, {
 })
 logger.level = 'debug';
 
+
+
+
+
+
+
+
+
+
 // Start the bot
-const bot = new Discord.Client({
-    token: auth.token,
-    autorun: true
-});
-bot.on('ready', (event) =>{
-    logger.info('Scallybot connected!');
-    logger.info(`Logged in as: ${bot.username} + -(${bot.id})`);
-});
+const bot = new Discord.Client();
 
-// Listen for messages?
-let ravioliCounter = 0;
-let ravioli = ["Ravioli", "ravioli", "give me", "the formuoli."];
+bot.login(auth.token);
 
-bot.on('message', (user, userID, channelID, message, event) => {
-    if (user == 'DrewTaku') {
-        bot.sendMessage({
-            to: channelID,
-            message: ravioli[ravioliCounter]
-        });
-        ravioliCounter++;
-        if (ravioliCounter == (ravioli.length - 1)) {
-            ravioliCounter = 0;
-        }
-    }
-    if (message.substring(0,1) == '!') {
-        let args = message.substring(1).split(' ');
-        let cmd = args[0];
-        args.shift();
-        let msg = args.join(' ');
+bot.on('ready', () => {
+    console.log('Bot is on and ready!!!!');
+})
 
-        logger.debug(args.splice(1));
+bot.on('message', (message) => {
+    if (message.content.startsWith('!')) {
+        let messageArray = message.content.substring(1).split(' ');
+        const command = messageArray[0].toLowerCase();
 
-        switch(cmd) {
+        switch(command) {
             case 'ping':
-                bot.sendMessage({
-                    to: channelID,
-                    message: 'Pong!'
-                });
+                message.channel.send('pong');
                 break;
-            case 'what':
-                client.query('Select * from test;', (err, res) => {
-                    if (err) {
-                        bot.sendMessage({
-                            to: channelID,
-                            message: 'Sorry. Something went wrong. Blame Juicey.'
-                        });
-                        logger.error(err.stack);
-                    } else {
-                        bot.sendMessage({
-                            to: channelID,
-                            message: res.rows[0].name + ' said "' + res.rows[0].message + '"'
-                        });
-                        // logger.debug(res.rows[0]);
-                    }
-                });
+            case 'scheduleraid':
+                scheduleraid(message);
                 break;
-            case 'storemessage':
-                client.query('Insert into test(name,message) VALUES($1,$2);', [user, msg], (err, res) => {
-                    if (err) {
-                        bot.sendMessage({
-                            to: channelID,
-                            message: 'Sorry. Something went wrong. Blame Juicey.'
-                        });
-                        logger.error(err.stack);
-                    } else {
-                        logger.debug(`Stored ${msg} from ${userID}`);
-                        // logger.debug(res.rows[0]);
-                    }
-                });
+            case 'listraids':
+                listraids(message);
                 break;
-            case 'readmessage':
-                client.query('SELECT id,name,message FROM test ORDER BY id DESC LIMIT 1', (err, res) => {
-                    if (err) {
-                        bot.sendMessage({
-                            to: channelID,
-                            message: 'Sorry. Something went wrong. Blame Juicey.'
-                        });
-                        logger.error(err.stack);
-                    } else {
-                        bot.sendMessage({
-                            to: channelID,
-                            message: `${res.rows[0].name} said "${res.rows[0].message}"`
-                        });
-                    }
-                });
+            case 'register':
+                register(message);
                 break;
         }
     }
-});
+})
+
+function scheduleraid(message) {
+    if (message.author.id == '176213323266654208' || true) { //TODO: remove the || true section to restrict this function
+        const userName = message.author.username;
+        const userID = message.author.id;
+        // Using this filter should ensure that it only listens for messages from the author that sent the first ! command for the rest of this section
+        const filter = msg => msg.author.id == message.author.id;
+        const timeLimit = 120000;
+        const options = {
+            maxMatches: 1,
+            time: timeLimit,
+            errors: ['time']
+        }
+        message.channel.send(`Hi ${userName}! Which raid will it be? (raid name)`);
+        message.channel.awaitMessages(filter, options)
+            .then(raidCollection => {
+                let raidName = raidCollection.first().content;
+                message.channel.send(`Alright, ${raidName} it is! What day and time? (m/d hh:mm)`)
+                message.channel.awaitMessages(filter, options)
+                    .then(timeCollection => {
+                        let dateTimeString = timeCollection.first().content; // User date/time input
+                        let dateTime = chrono.parseDate(dateTimeString); // Gets saved to database
+                        let dateObj = Date.parse(dateTime); // Obj for parsing to format for user
+
+                        let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                        let prettyTime = dateFormat(dateObj, "h:MMtt");
+                        
+                        message.channel.send(`
+                            You got it.\nJust to confirm, you're running ${raidName} on ${prettyDate} at ${prettyTime}? (yes/no)`
+                        );
+                        message.channel.awaitMessages(filter, options)
+                            .then(confirmation => {
+                                if (confirmation.first().content.toLowerCase().includes('yes')) {
+                                    message.channel.send('Awesome. I\'ll get that setup for you...');
+
+                                    // Save raid scheduling info to postgres
+                                    let query = 'INSERT INTO raids(raidname,timestring,organizerid) VALUES($1,$2,$3);';
+                                    console.log('Let\'s execute the query');
+                                    client.query(query, [raidName, dateTime, userID], (err, res) => {
+                                        if (err) {
+                                            message.channel.send('For some reason I couldn\'t save that info to the database.');
+                                            console.error(err);
+                                        } else {
+                                            message.channel.send('Success.');
+                                            message.channel.send('Good luck with the raid!');
+                                            message.channel.send(res.rows);
+                                            logger.debug(`${userName}'s query saved!:
+                                            ${res.command} completed successfully at ${Date.now().toLocaleString()}`
+                                            );
+                                        }
+                                    });
+                                } else if (confirmation.first().content.toLowerCase().includes('no')) {
+                                    message.channel.send('Uh oh, I must have misunderstood. Try scheduling again.');
+                                } else {
+                                    // This is hacky. We should use recursion.
+                                    message.channel.awaitMessages(filter, options)
+                                        .then(retryConfirmation => {
+                                            // TODO: Figure out why this isn't working. I think it's broken
+                                            if (retryConfirmation.first().content.toLowerCase().includes('yes')) {
+                                                message.channel.send('Awesome. I\'ll get that setup for you...');
+                                            } else if (retryConfirmation.first().content.toLowerCase().includes('no')) {
+                                                message.channel.send('Uh oh, I must have misunderstood. Try scheduling again.');
+                                            } else {
+                                                message.channel.send('I don\'t know what\'s going on. Sorry about this.');
+                                            }
+                                        })
+                                        .catch(confirmation => {
+                                            console.log(`Rejected, and here's what we got: ${confirmation}`);
+                                            message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
+                                        })
+                                }
+                            })
+                            .catch(confirmation => {
+                                console.log(`Rejected, and here's what we got: ${confirmation}`);
+                                message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
+                            })
+                    })
+                    .catch(timeCollection => {
+                        console.log(`Rejected, and here's what we got: ${timeCollection}`);
+                        message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
+                    })
+            })
+            .catch(raidCollection => {
+                console.log(`Rejected, request from ${userName} timed out after ${timeLimit/1000} seconds.`);
+                message.channel.send('Looks like this "!" request took too long. Try again.');
+            })
+    }
+}
+
+function listraids(message) {
+    const query = 'SELECT * FROM raids;'
+    client.query(query, (err, res) => {
+        if (err) {
+            message.channel.send('I had some trouble retrieving the list for you. Ask Juicey wtf he did to my logic.');
+            console.error(err);
+        } else {
+            console.log(res);
+            res.rows.forEach((x) => {
+                let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                let prettyTime = dateFormat(dateObj, "h:MMtt");
+                message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+            });
+        }
+    });
+}
+
+function register(message) {
+    const query = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
+    client.query(query, [message.author.id, message.author.username], (err, res) => {
+        if (err) {
+            message.channel.send(`I had trouble saving your info. Try again later or ask Juicey about it.`);
+            console.error(err);
+        } else {
+            message.channel.send(`Alright, ${message.author.username}, You're good to go! You can now use "!signup" to sign up for a raid.`);
+            console.log(res);
+        }
+    });
+}
+
+function signup(message) {
+    const query = 'SELECT * FROM raids;'
+    client.query(query, (err, res) => {
+        if (err) {
+            message.channel.send('I had some trouble starting the signup process. Ask Juicey wtf he did to my logic.');
+            console.error(err);
+        } else {
+            if (res.rows.length == 1) {
+                const onlyRaid = res.rows[0];
+                let dateObj = Date.parse(onlyRaid.timestring); // Obj for parsing to format for user
+                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                let prettyTime = dateFormat(dateObj, "h:MMtt");
+                message.channel.send('I found one raid scheduled:');
+                message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+                message.channel.send('Would you like to signup for this raid (yes/no)');
+                
+                // awaitMessages options
+                const filter = msg => msg.author.id == message.author.id;
+                const timeLimit = 120000;
+                const options = {
+                    maxMatches: 1,
+                    time: timeLimit,
+                    errors: ['time']
+                }
+
+                message.channel.awaitMessages(filter, options)
+                    .then(confirmation => {
+
+                    })
+                    .catch(confirmation => {
+                        console.log(`Rejected, and here's what we got: ${confirmation}`);
+                        message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
+                    })
+            }
+            console.log(res);
+            res.rows.forEach((x) => {
+                let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                let prettyTime = dateFormat(dateObj, "h:MMtt");
+                message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+            });
+        }
+    });
+}
 
 
-// Pre-exit scripts
+
+/*########### Pre-exit scripts ############*/
 let preExit = [];
 
 // Catch exit
@@ -143,7 +280,7 @@ process.on ('uncaughtException', err => {
 
 
 // INSERT CODE
-console.log ('App ready - hit CTRL+C ;)');
+console.log ('App running...');
 
 // Add pre-exit script
 preExit.push (code => {
