@@ -229,7 +229,24 @@ function signup(message) {
 
                 message.channel.awaitMessages(filter, options)
                     .then(confirmation => {
-
+                        const confirmationResponse = confirmation.first().content.toString().toLowerCase();
+                        switch (confirmationResponse) {
+                            case 'no':
+                            case 'n':
+                                message.channel.send('Alright, nevermind then.');
+                                break;
+                            case 'yes':
+                            case 'y':
+                            case 'ye':
+                                const checkSignupStatusQuery = 'SELECT playerid FROM signups;';
+                                client.query(query, (err, res) => {
+                                    if (err) {
+                                        message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
+                                    }
+                                })
+                                message.channel.send('');
+                                break;
+                        }
                     })
                     .catch(confirmation => {
                         console.log(`Rejected, and here's what we got: ${confirmation}`);
@@ -247,7 +264,18 @@ function signup(message) {
     });
 }
 
-
+function errMsg(msg, str) {
+    if (msg.channel) {
+        if (str) {
+            return msg.channel.send(str);
+        } else {
+            return msg.channel.send('Whoops. Something went wrong. Tell Juicey to check the logs.');
+        }
+    } else {
+        console.log(`msg param has no channel`);
+        return;
+    }
+}
 
 /*########### Pre-exit scripts ############*/
 let preExit = [];
