@@ -242,17 +242,20 @@ function signup(message) {
                                                     const roleChoice = roleResponse.first().content.toString().toLowerCase();
                                                     let role;
                                                     switch (roleChoice) {
+                                                        case '!dps':
                                                         case 'dps':
                                                         case 'damage':
                                                         case 'deeps':
                                                             role = 'DPS';
                                                             break;
+                                                        case '!heals':
                                                         case 'heals':
                                                         case 'heal':
                                                         case 'healer':
                                                         case 'hps':
                                                             role = 'Healer';
                                                             break;
+                                                        case '!tank':
                                                         case 'tank':
                                                         case 'tnk':
                                                             role = 'Tank';
@@ -283,6 +286,9 @@ function signup(message) {
                                     }
                                 });
                                 break;
+                            default:
+                                message.channel.send('That doesn\'t look like a role I understand. Try !signup again');
+                                return;
                         }
                     })
                     .catch(confirmation => {
@@ -306,19 +312,19 @@ function signup(message) {
 }
 
 function listsignups(message) {
-    const query = 'SELECT * FROM players LEFT OUTER JOIN signups ON (players.playerid = signups.playerid);'
+    const query = 'SELECT * FROM players LEFT OUTER JOIN signups ON (players.playerid = signups.playerid) LEFT OUTER JOIN raids ON (signups.raidid = raids.raidid) ORDER BY signups.raidid;'
     client.query(query, (err, res) => {
         if (err) {
             message.channel.send('I had some trouble retrieving the list for you. Ask Juicey wtf he did to my logic.');
             console.error(err);
         } else {
             console.log(res);
-            // res.rows.forEach((x) => {
-            //     let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
-            //     let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
-            //     let prettyTime = dateFormat(dateObj, "h:MMtt");
-            //     message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
-            // });
+            res.rows.forEach((x) => {
+                let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                let prettyTime = dateFormat(dateObj, "h:MMtt");
+                message.channel.send(`\`\`\`${x.raidname} (id: ${x.raidid}) ${x.playername} - ${x.mainrole}\`\`\``);
+            });
         }
     });
 }
