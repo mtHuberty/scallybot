@@ -13,21 +13,6 @@ const client = new Client({
     port: 5432
 });
 
-if (false) {
-    client.query('Insert into test(name,message) VALUES($1,$2);', [user, msg], (err, res) => {
-        if (err) {
-            bot.sendMessage({
-                to: channelID,
-                message: 'Sorry. Something went wrong. Blame Juicey.'
-            });
-            logger.error(err.stack);
-        } else {
-            logger.debug(`Stored ${msg} from ${userID}`);
-            // logger.debug(res.rows[0]);
-        }
-    });
-}
-
 client.connect((err) => {
     if (err) {
         logger.error(err);
@@ -78,6 +63,12 @@ bot.on('message', (message) => {
                 break;
             case 'register':
                 register(message);
+                break;
+            case 'signup':
+                signup(message);
+                break;
+            case 'listsignups':
+                listsignups(message);
                 break;
         }
     }
@@ -215,8 +206,8 @@ function signup(message) {
                 let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
                 let prettyTime = dateFormat(dateObj, "h:MMtt");
                 message.channel.send('I found one raid scheduled:');
-                message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
-                message.channel.send('Would you like to signup for this raid (yes/no)');
+                message.channel.send(`\`\`\`${onlyRaid.raidname} on ${prettyDate} at ${prettyTime} (id: ${onlyRaid.raidid})\`\`\``);
+                message.channel.send('Would you like to signup for this raid? (yes/no)');
                 
                 // awaitMessages options
                 const filter = msg => msg.author.id == message.author.id;
@@ -238,13 +229,59 @@ function signup(message) {
                             case 'yes':
                             case 'y':
                             case 'ye':
-                                const checkSignupStatusQuery = 'SELECT playerid FROM signups;';
-                                client.query(query, (err, res) => {
+                                const checkSignupStatusQuery = 'SELECT playerid FROM signups WHERE playerid=$1;';
+                                client.query(checkSignupStatusQuery, [message.author.id], (err, res) => {
                                     if (err) {
-                                        message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
+                                        console.error(err);
+                                        errMsg(message); //TODO: Replace all errors with errMsg function call
+                                    } else {
+                                        if (res.rows.length == 0) {
+                                            message.channel.send('What main role would you prefer? (Choose ONE of: DPS, Healer, or Tank)');
+                                            message.channel.awaitMessages(filter, options)
+                                                .then(roleResponse => {
+                                                    const roleChoice = roleResponse.first().content.toString().toLowerCase();
+                                                    let role;
+                                                    switch (roleChoice) {
+                                                        case 'dps':
+                                                        case 'damage':
+                                                        case 'deeps':
+                                                            role = 'DPS';
+                                                            break;
+                                                        case 'heals':
+                                                        case 'heal':
+                                                        case 'healer':
+                                                        case 'hps':
+                                                            role = 'Healer';
+                                                            break;
+                                                        case 'tank':
+                                                        case 'tnk':
+                                                            role = 'Tank';
+                                                            break;
+                                                    }
+
+                                                    const signupQuery = 'INSERT INTO signups (playerid, raidid, mainrole) VALUES ($1,$2,$3) ON CONFLICT (playerid) DO UPDATE SET mainrole=$3;';
+                                                    client.query(signupQuery, [message.author.id, onlyRaid.raidid, role], (err, res) => {
+                                                        if (err) {
+                                                            console.error(err);
+                                                            errMsg(message);
+                                                        } else {
+                                                            message.channel.send(`Sounds good, ${message.author.username}, you're signed up as a ${role} for ${onlyRaid.raidname}`);
+                                                        }
+                                                    });
+                                                })
+                                                .catch(role => {
+                                                    errMsg(message);
+                                                })
+                                        } else if (res.rows.length == 1) {
+                                            message.channel.send(`Looks like you're already signed up, ${message.author.username}! See you there.`);
+                                            message.channel.send(`(If you want to cancel this signup, use "!cancel")`);
+                                            return;
+                                        } else {
+                                            errMsg(message, `Somehow it looks like you're signed up more than once. No idea how that happened. Tell Juicey.`);
+                                            return;
+                                        }
                                     }
-                                })
-                                message.channel.send('');
+                                });
                                 break;
                         }
                     })
@@ -252,14 +289,36 @@ function signup(message) {
                         console.log(`Rejected, and here's what we got: ${confirmation}`);
                         message.channel.send('Whoops. Something went wrong with that request. Tell Juicey to check the logs.');
                     })
+            } else if (res.rows.length == 0) {
+                message.channel.send('It looks like there aren\'t any raids scheduled right now. Check back later.');
+            } else {
+                console.log(res);
+                res.rows.forEach((x) => {
+                    let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                    let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                    let prettyTime = dateFormat(dateObj, "h:MMtt");
+                    message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+                });
             }
+            
+        }
+    });
+}
+
+function listsignups(message) {
+    const query = 'SELECT * FROM players LEFT OUTER JOIN signups ON (players.playerid = signups.playerid);'
+    client.query(query, (err, res) => {
+        if (err) {
+            message.channel.send('I had some trouble retrieving the list for you. Ask Juicey wtf he did to my logic.');
+            console.error(err);
+        } else {
             console.log(res);
-            res.rows.forEach((x) => {
-                let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
-                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
-                let prettyTime = dateFormat(dateObj, "h:MMtt");
-                message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
-            });
+            // res.rows.forEach((x) => {
+            //     let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+            //     let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+            //     let prettyTime = dateFormat(dateObj, "h:MMtt");
+            //     message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+            // });
         }
     });
 }
