@@ -355,7 +355,7 @@ function cancelsignup(message) {
         time: timeLimit,
         errors: ['time']
     }
-    const query = 'SELECT * FROM players LEFT OUTER JOIN signups ON (players.playerid = signups.playerid) LEFT OUTER JOIN raids ON (signups.raidid = raids.raidid) WHERE signups.playerid=$1 ORDER BY signups.raidid;';
+    const query = 'SELECT * FROM players INNER JOIN signups ON (players.playerid = signups.playerid) INNER JOIN raids ON (signups.raidid = raids.raidid) WHERE signups.playerid=$1 ORDER BY signups.raidid;';
     client.query(query, [message.author.id], (err, res) => {
         if (err) {
             message.channel.send('I had some trouble retrieving the list of sign-ups for you. Ask Juicey wtf he did to my logic.');
@@ -382,8 +382,8 @@ function cancelsignup(message) {
                     console.log(raididToCancel);
                     // Check that the number they entered is in the list of raidids of raids they've signed up for
                     if (signedUpRaidIds.includes(raididToCancel)) {
-                        const cancelQuery = 'DELETE FROM signups WHERE raidid=$1;';
-                        client.query(cancelQuery, [raididToCancel], (err, res) => {
+                        const cancelQuery = 'DELETE FROM signups WHERE raidid=$1 AND playerid=$2;';
+                        client.query(cancelQuery, [raididToCancel, message.author.id], (err, res) => {
                             if (err) {
                                 console.error(err);
                                 message.channel.send('Either that wasn\'t a real raid id or idk what the hell\'s going on. Try again or ask Juicey.');
