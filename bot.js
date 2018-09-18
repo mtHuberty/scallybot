@@ -70,6 +70,10 @@ bot.on('message', (message) => {
             case 'listsignups':
                 listsignups(message);
                 break;
+            case 'cancelsignup':
+            case 'cancelsignups':
+                cancelsignup(message);
+                break;
         }
     }
 })
@@ -267,6 +271,9 @@ function signup(message) {
                                                         case 'tnk':
                                                             role = 'Tank';
                                                             break;
+                                                        default:
+                                                            message.channel.send('That doesn\'nt look like a role I understand. Try again.');
+                                                            return;
                                                     }
 
                                                     const signupQuery = 'INSERT INTO signups (playerid, raidid, mainrole) VALUES ($1,$2,$3) ON CONFLICT (playerid) DO UPDATE SET mainrole=$3;';
@@ -284,7 +291,7 @@ function signup(message) {
                                                 })
                                         } else if (res.rows.length == 1) {
                                             message.channel.send(`Looks like you're already signed up, ${message.author.username}! See you there.`);
-                                            message.channel.send(`(If you want to cancel this signup, use "!cancel")`);
+                                            message.channel.send(`(If you want to cancel this signup, use "!cancelsignup")`);
                                             return;
                                         } else {
                                             errMsg(message, `Somehow it looks like you're signed up more than once. No idea how that happened. Tell Juicey.`);
@@ -294,7 +301,7 @@ function signup(message) {
                                 });
                                 break;
                             default:
-                                message.channel.send('That doesn\'t look like a role I understand. Try !signup again');
+                                message.channel.send('Sorry, that didn\'t look like a yes or no. I\'m actually kind of stupid so if you could keep it simple, that\'d be great');
                                 return;
                         }
                     })
@@ -319,12 +326,16 @@ function signup(message) {
 }
 
 function listsignups(message) {
-    const query = 'SELECT * FROM players LEFT OUTER JOIN signups ON (players.playerid = signups.playerid) LEFT OUTER JOIN raids ON (signups.raidid = raids.raidid) ORDER BY signups.raidid;'
+    const query = 'SELECT * FROM signups INNER JOIN players ON (players.playerid = signups.playerid) INNER JOIN raids ON (signups.raidid = raids.raidid) ORDER BY signups.raidid;';
     client.query(query, (err, res) => {
         if (err) {
             message.channel.send('I had some trouble retrieving the list for you. Ask Juicey wtf he did to my logic.');
             console.error(err);
         } else {
+            if (res.rows.length == 0) {
+                message.channel.send('There are no sign-ups for any currently scheduled raids.');
+                return;
+            }
             console.log(res);
             res.rows.forEach((x) => {
                 let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
@@ -332,6 +343,63 @@ function listsignups(message) {
                 let prettyTime = dateFormat(dateObj, "h:MMtt");
                 message.channel.send(`\`\`\`${x.raidname} (id: ${x.raidid}) ${x.playername} - ${x.mainrole}\`\`\``);
             });
+        }
+    });
+}
+
+function cancelsignup(message) {
+    const filter = msg => msg.author.id == message.author.id;
+    const timeLimit = 120000;
+    const options = {
+        maxMatches: 1,
+        time: timeLimit,
+        errors: ['time']
+    }
+    const query = 'SELECT * FROM players LEFT OUTER JOIN signups ON (players.playerid = signups.playerid) LEFT OUTER JOIN raids ON (signups.raidid = raids.raidid) WHERE signups.playerid=$1 ORDER BY signups.raidid;';
+    client.query(query, [message.author.id], (err, res) => {
+        if (err) {
+            message.channel.send('I had some trouble retrieving the list of sign-ups for you. Ask Juicey wtf he did to my logic.');
+            console.error(err);
+        } else {
+            if (res.rows.length == 0) {
+                message.channel.send('You don\'t appear to be signed up for any raids at the moment. Try using "!signup" to see fix that.');
+                return;
+            }
+            console.log(res);
+            message.channel.send('I found the following sign-ups for your account.');
+            const signedUpRaidIds = [];
+            res.rows.forEach((x) => {
+                let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                signedUpRaidIds.push(x.raidid);
+                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                let prettyTime = dateFormat(dateObj, "h:MMtt");
+                message.channel.send(`\`\`\`${x.raidname} (id: ${x.raidid}) ${x.playername} - ${x.mainrole}\`\`\``);
+            });
+            message.channel.send('If you\'re sure you want to cancel, what is the ID of the raid you need to cancel your signup for?');
+            message.channel.awaitMessages(filter, options)
+                .then(confirmation => {
+                    const raididToCancel = parseInt(confirmation.first().content.trim());
+                    console.log(raididToCancel);
+                    // Check that the number they entered is in the list of raidids of raids they've signed up for
+                    if (signedUpRaidIds.includes(raididToCancel)) {
+                        const cancelQuery = 'DELETE FROM signups WHERE raidid=$1;';
+                        client.query(cancelQuery, [raididToCancel], (err, res) => {
+                            if (err) {
+                                console.error(err);
+                                message.channel.send('Either that wasn\'t a real raid id or idk what the hell\'s going on. Try again or ask Juicey.');
+                            } else {
+                                message.channel.send('FINE THEN! WE DON\'T NEED YOU THERE ANYWAY!');
+                                message.channel.send('...kidding, catch you at the next one.');
+                            }
+                        });
+                    } else {
+                        message.channel.send('That doesn\'t seem to be an id for a raid that you\'re signed up for. Try again.');
+                    }
+                })
+                .catch(reason => {
+                    console.error(reason);
+                    errMsg(message, "I don't have all day! Let me know when you're ready to try that again.");
+                })
         }
     });
 }
