@@ -59,19 +59,19 @@ bot.on('message', (message) => {
                 scheduleraid(message);
                 break;
             case 'listraids':
+            case 'raids':
                 listraids(message);
                 break;
-            // case 'register':
-            //     register(message);
-            //     break;
             case 'signup':
                 signup(message);
                 break;
             case 'listsignups':
+            case 'signups':
                 listsignups(message);
                 break;
             case 'cancelsignup':
             case 'cancelsignups':
+            case 'cancel':
                 cancelsignup(message);
                 break;
         }
