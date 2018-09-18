@@ -184,19 +184,6 @@ function listraids(message) {
     });
 }
 
-// function register(message) {
-//     const query = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
-//     client.query(query, [message.author.id, message.author.username], (err, res) => {
-//         if (err) {
-//             message.channel.send(`I had trouble saving your info. Try again later or ask Juicey about it.`);
-//             console.error(err);
-//         } else {
-//             message.channel.send(`Alright, ${message.author.username}, You're good to go! You can now use "!signup" to sign up for a raid.`);
-//             console.log(res);
-//         }
-//     });
-// }
-
 function signup(message) {
     const registerQuery = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
     client.query(registerQuery, [message.author.id, message.author.username], (err, res) => {
