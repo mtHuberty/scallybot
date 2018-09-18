@@ -47,7 +47,7 @@ bot.on('ready', () => {
 })
 
 bot.on('message', (message) => {
-    if (message.content.startsWith('!')) {
+    if (message.content.trim().startsWith('!')) {
         let messageArray = message.content.substring(1).split(' ');
         const command = messageArray[0].toLowerCase();
 
@@ -61,9 +61,9 @@ bot.on('message', (message) => {
             case 'listraids':
                 listraids(message);
                 break;
-            case 'register':
-                register(message);
-                break;
+            // case 'register':
+            //     register(message);
+            //     break;
             case 'signup':
                 signup(message);
                 break;
@@ -180,22 +180,29 @@ function listraids(message) {
     });
 }
 
-function register(message) {
-    const query = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
-    client.query(query, [message.author.id, message.author.username], (err, res) => {
+// function register(message) {
+//     const query = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
+//     client.query(query, [message.author.id, message.author.username], (err, res) => {
+//         if (err) {
+//             message.channel.send(`I had trouble saving your info. Try again later or ask Juicey about it.`);
+//             console.error(err);
+//         } else {
+//             message.channel.send(`Alright, ${message.author.username}, You're good to go! You can now use "!signup" to sign up for a raid.`);
+//             console.log(res);
+//         }
+//     });
+// }
+
+function signup(message) {
+    const registerQuery = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
+    client.query(registerQuery, [message.author.id, message.author.username], (err, res) => {
         if (err) {
             message.channel.send(`I had trouble saving your info. Try again later or ask Juicey about it.`);
             console.error(err);
-        } else {
-            message.channel.send(`Alright, ${message.author.username}, You're good to go! You can now use "!signup" to sign up for a raid.`);
-            console.log(res);
         }
     });
-}
-
-function signup(message) {
-    const query = 'SELECT * FROM raids;'
-    client.query(query, (err, res) => {
+    const raidQuery = 'SELECT * FROM raids;'
+    client.query(raidQuery, (err, res) => {
         if (err) {
             message.channel.send('I had some trouble starting the signup process. Ask Juicey wtf he did to my logic.');
             console.error(err);
