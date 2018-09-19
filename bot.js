@@ -185,6 +185,8 @@ function listraids(message) {
 }
 
 function signup(message) {
+
+    // First attempt to "register" any player that's not already in the players table
     const registerQuery = `INSERT INTO players (playerid,playername) VALUES ($1,$2) ON CONFLICT (playerid) DO UPDATE SET playername=$2;`;
     client.query(registerQuery, [message.author.id, message.author.username], (err, res) => {
         if (err) {
@@ -192,13 +194,116 @@ function signup(message) {
             console.error(err);
         }
     });
+
+    // 
     const raidQuery = 'SELECT * FROM raids;'
     client.query(raidQuery, (err, res) => {
         if (err) {
             message.channel.send('I had some trouble starting the signup process. Ask Juicey wtf he did to my logic.');
             console.error(err);
         } else {
-            if (res.rows.length == 1) {
+            if (res.rows.length > 1) {
+                console.log(res);
+                message.channel.send("I found the following raids scheduled:");
+                const scheduledRaidIds = [];
+                const raidIdToName = {};
+                res.rows.forEach((x) => {
+                    let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                    let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                    let prettyTime = dateFormat(dateObj, "h:MMtt");
+                    message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+                    scheduledRaidIds.push(x.raidid);
+                    raidIdToName[x.raidid] = x.raidname;
+                });
+                message.channel.send("Please enter the ID of the raid you would like to signup for. (e.g. 6)");
+                const filter = msg => msg.author.id == message.author.id;
+                const timeLimit = 120000;
+                const options = {
+                    maxMatches: 1,
+                    time: timeLimit,
+                    errors: ['time']
+                }
+                message.channel.awaitMessages(filter, options)
+                    .then(confirmation => {
+                        const raidIdResponse = confirmation.first().content.toString().toLowerCase();
+                        const raidIdInt = parseInt(raidIdResponse);
+
+                        // Start new logic
+                        if (scheduledRaidIds.includes(raidIdInt)) {
+                            const checkSignupStatusQuery = 'SELECT playerid FROM signups WHERE playerid=$1;';
+                            client.query(checkSignupStatusQuery, [message.author.id], (err, res) => {
+                                if (err) {
+                                    console.error(err);
+                                    errMsg(message); //TODO: Replace all errors with errMsg function call
+                                } else {
+                                    const alreadySignedUpRaidIds = [];
+                                    res.rows.forEach(row => {
+                                        alreadySignedUpRaidIds.push(row.raidid);
+                                    })
+                                    if (!alreadySignedUpRaidIds.includes(raidIdInt)) {
+                                        message.channel.send('What main role would you prefer? (Choose ONE of: DPS, Healer, or Tank)');
+                                        message.channel.awaitMessages(filter, options)
+                                            .then(roleResponse => {
+                                                const roleChoice = roleResponse.first().content.toString().toLowerCase();
+                                                let role;
+                                                switch (roleChoice) {
+                                                    case '!dps':
+                                                    case 'dps':
+                                                    case 'damage':
+                                                    case 'deeps':
+                                                        role = 'DPS';
+                                                        break;
+                                                    case '!heals':
+                                                    case 'heals':
+                                                    case 'heal':
+                                                    case 'healer':
+                                                    case 'hps':
+                                                        role = 'Healer';
+                                                        break;
+                                                    case '!tank':
+                                                    case 'tank':
+                                                    case 'tnk':
+                                                        role = 'Tank';
+                                                        break;
+                                                    default:
+                                                        message.channel.send('That doesn\'nt look like a role I understand. Try again.');
+                                                        return;
+                                                }
+
+                                                const signupQuery = 'INSERT INTO signups (playerid, raidid, mainrole) VALUES ($1,$2,$3) ON CONFLICT (playerid) DO UPDATE SET mainrole=$3;';
+                                                client.query(signupQuery, [message.author.id, raidIdInt, role], (err, res) => {
+                                                    if (err) {
+                                                        console.error(err);
+                                                        errMsg(message);
+                                                    } else {
+                                                        message.channel.send(`Sounds good, ${message.author.username}, you're signed up as a ${role} for ${raidIdToName[raidIdInt]}`);
+                                                    }
+                                                });
+                                            })
+                                            .catch(reason => {
+                                                console.log(reason);
+                                                errMsg(message);
+                                            })
+                                    } else if (alreadySignedUpRaidIds.includes(raidIdInt)) {
+                                        message.channel.send(`Looks like you're already signed up, ${message.author.username}! See you there.`);
+                                        message.channel.send(`(If you want to cancel this signup, use "!cancelsignup")`);
+                                        return;
+                                    } else {
+                                        errMsg(message, `You're not signed up...but I think you're somehow also already signed up. My logic is broken. Tell Juicey.`);
+                                        return;
+                                    }
+                                }
+                            });
+                        } else {
+                            errMsg(message, "That doesn't seem to match a scheduled raid. Try again.");
+                        }
+                        // End new logic
+                    })
+                    .catch(reason => {
+                        console.error(reason);
+                        errMsg(message);
+                    })
+            } else if (res.rows.length == 1) {
                 const onlyRaid = res.rows[0];
                 let dateObj = Date.parse(onlyRaid.timestring); // Obj for parsing to format for user
                 let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
@@ -227,6 +332,7 @@ function signup(message) {
                             case 'yes':
                             case 'y':
                             case 'ye':
+                                // Using this again above for multiple raid logic. Consider extracting this to a function
                                 const checkSignupStatusQuery = 'SELECT playerid FROM signups WHERE playerid=$1;';
                                 client.query(checkSignupStatusQuery, [message.author.id], (err, res) => {
                                     if (err) {
@@ -299,13 +405,14 @@ function signup(message) {
             } else if (res.rows.length == 0) {
                 message.channel.send('It looks like there aren\'t any raids scheduled right now. Check back later.');
             } else {
-                console.log(res);
-                res.rows.forEach((x) => {
-                    let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
-                    let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
-                    let prettyTime = dateFormat(dateObj, "h:MMtt");
-                    message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
-                });
+                // TODO - change/kill this section. Copying code to top of if chain
+                // console.log(res);
+                // res.rows.forEach((x) => {
+                //     let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
+                //     let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
+                //     let prettyTime = dateFormat(dateObj, "h:MMtt");
+                //     message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+                // });
             }
             
         }
@@ -349,7 +456,7 @@ function cancelsignup(message) {
             console.error(err);
         } else {
             if (res.rows.length == 0) {
-                message.channel.send('You don\'t appear to be signed up for any raids at the moment. Try using "!signup" to see fix that.');
+                message.channel.send('You don\'t appear to be signed up for any raids at the moment. Try using "!signup" to see the list of raids and fix that.');
                 return;
             }
             console.log(res);
