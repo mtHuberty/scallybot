@@ -2,9 +2,11 @@ const Discord = require('discord.js');
 const logger = require('winston');
 const chrono = require('chrono-node');
 const dateFormat = require('dateformat');
+const schedule = require('node-schedule');
 const auth = require('./auth.json');
 const { Client } = require('pg');
 
+// Setup database connection client
 const client = new Client({
     user: 'scallybot',
     host: 'localhost',
@@ -13,6 +15,7 @@ const client = new Client({
     port: 5432
 });
 
+// Connect to PostgreSQL
 client.connect((err) => {
     if (err) {
         logger.error(err);
@@ -29,14 +32,6 @@ logger.add(new logger.transports.Console, {
 logger.level = 'debug';
 
 
-
-
-
-
-
-
-
-
 // Start the bot
 const bot = new Discord.Client();
 
@@ -45,6 +40,28 @@ bot.login(auth.token);
 bot.on('ready', () => {
     console.log('Bot is on and ready!!!!');
 })
+
+// Schedule Reminders
+const schedulerQuery = 'SELECT signups.playerid, raids.timestring FROM signups INNER JOIN raids ON signups.raidid = raids.raidid ORDER BY signups.raidid ASC;';
+client.query(schedulerQuery, [], (err, res) => {
+    let playeridSchedArray = [];
+    let timeObjSchedArray = [];
+    if (err) {
+        console.error(err.message);
+    } else {
+        res.rows.forEach(row => {
+            playeridSchedArray.push(row.playerid);
+            timeObjSchedArray.push(Date.parse(row.timestring));
+        });
+        playeridSchedArray.forEach((playerid,ind) => {
+            schedule.scheduleJob(timeObjSchedArray[ind], () => {
+                bot.users.get(playerid).send("This is a friendly reminder that your raid is starting soon!!");
+            })
+        })
+    }
+    console.log("Reminders are scheduled!");
+})
+
 
 bot.on('message', (message) => {
     if (message.content.trim().startsWith('!')) {
