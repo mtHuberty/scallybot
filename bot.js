@@ -221,18 +221,21 @@ function signup(message) {
             message.channel.send('I had some trouble starting the signup process. Ask Juicey wtf he did to my logic.');
             console.error(err);
         } else {
+            //TODO check that raids are actually scheduled in future, like in else statement below.
             if (res.rows.length > 1) {
                 console.log(res);
                 message.channel.send("I found the following raids scheduled:");
                 const scheduledRaidIds = [];
                 const raidIdToName = {};
                 res.rows.forEach((x) => {
-                    let dateObj = Date.parse(x.timestring); // Obj for parsing to format for user
-                    let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
-                    let prettyTime = dateFormat(dateObj, "h:MMtt");
-                    message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
-                    scheduledRaidIds.push(x.raidid);
-                    raidIdToName[x.raidid] = x.raidname;
+                    let raidTimeUnix = Date.parse(x.timestring); // Obj for parsing to format for user
+                    if (raidTimeUnix > Date.now()) {
+                        let prettyDate = dateFormat(raidTimeUnix, "dddd, mmm dS");
+                        let prettyTime = dateFormat(raidTimeUnix, "h:MMtt");
+                        message.channel.send(`\`\`\`${x.raidname} on ${prettyDate} at ${prettyTime} (id: ${x.raidid})\`\`\``);
+                        scheduledRaidIds.push(x.raidid);
+                        raidIdToName[x.raidid] = x.raidname;
+                    }
                 });
                 message.channel.send("Please enter the ID of the raid you would like to signup for. (e.g. 6)");
                 const filter = msg => msg.author.id == message.author.id;
@@ -322,11 +325,11 @@ function signup(message) {
                         console.error(reason);
                         errMsg(message, "Yeah so I can't wait around forever. Let me know when you want to try again.");
                     })
-            } else if (res.rows.length == 1) {
+            } else if (res.rows.length == 1 && Date.parse(res.rows[0].timestring) > Date.now()) {
                 const onlyRaid = res.rows[0];
-                let dateObj = Date.parse(onlyRaid.timestring); // Obj for parsing to format for user
-                let prettyDate = dateFormat(dateObj, "dddd, mmm dS");
-                let prettyTime = dateFormat(dateObj, "h:MMtt");
+                let raidTimeUnix = Date.parse(onlyRaid.timestring); // Obj for parsing to format for user
+                let prettyDate = dateFormat(raidTimeUnix, "dddd, mmm dS");
+                let prettyTime = dateFormat(raidTimeUnix, "h:MMtt");
                 message.channel.send('I found one raid scheduled:');
                 message.channel.send(`\`\`\`${onlyRaid.raidname} on ${prettyDate} at ${prettyTime} (id: ${onlyRaid.raidid})\`\`\``);
                 message.channel.send('Would you like to signup for this raid? (yes/no)');
