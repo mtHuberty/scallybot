@@ -41,7 +41,7 @@ bot.on('ready', () => {
     console.log('Bot is on and ready!!!!');
 })
 
-// Schedule Reminders
+// Schedule Reminders for 1 Hour before raid
 const schedulerQuery = 'SELECT signups.playerid, raids.timestring FROM signups INNER JOIN raids ON signups.raidid = raids.raidid ORDER BY signups.raidid ASC;';
 client.query(schedulerQuery, [], (err, res) => {
     let playeridSchedArray = [];
@@ -51,9 +51,11 @@ client.query(schedulerQuery, [], (err, res) => {
     } else {
         res.rows.forEach(row => {
             playeridSchedArray.push(row.playerid);
-            timeObjSchedArray.push(Date.parse(row.timestring));
+            let raidUnixTime = Date.parse(row.timestring);
+            timeObjSchedArray.push(raidUnixTime - 3600);
         });
         playeridSchedArray.forEach((playerid,ind) => {
+            console.log(`Scheduling reminder for player ${playerid} at ${timeObjSchedArray[ind]}`);
             schedule.scheduleJob(timeObjSchedArray[ind], () => {
                 bot.users.get(playerid).send("This is a friendly reminder that your raid is starting soon!!");
             })
@@ -213,7 +215,7 @@ function signup(message) {
     });
 
     // 
-    const raidQuery = 'SELECT * FROM raids;'
+    const raidQuery = 'SELECT * FROM raids;';
     client.query(raidQuery, (err, res) => {
         if (err) {
             message.channel.send('I had some trouble starting the signup process. Ask Juicey wtf he did to my logic.');
@@ -318,7 +320,7 @@ function signup(message) {
                     })
                     .catch(reason => {
                         console.error(reason);
-                        errMsg(message);
+                        errMsg(message, "Yeah so I can't wait around forever. Let me know when you want to try again.");
                     })
             } else if (res.rows.length == 1) {
                 const onlyRaid = res.rows[0];
