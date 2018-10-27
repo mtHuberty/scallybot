@@ -39,6 +39,11 @@ bot.login(auth.token);
 
 bot.on('ready', () => {
     console.log('Bot is on and ready!!!!');
+    bot.guilds.tap((guild) => {
+        guild.members.tap((mem) => {
+            console.log(mem.nickname || mem.user.username);
+        })
+    })
 })
 
 // Schedule Reminders for 1 Hour before raid
@@ -95,6 +100,21 @@ bot.on('message', (message) => {
                 break;
         }
     }
+})
+
+bot.on('guildMemberUpdate', (oldMember, newMember) => {
+    if (oldMember.user.id == 155051241028714497) {
+
+    }
+    console.log(`Someone changed their name from ${oldMember.displayName} to ${newMember.displayName}`);
+
+})
+
+bot.on('userUpdate', (oldUser, newUser) => {
+    if (oldUser.id == 155051241028714497) {
+        console.log(`JOSH changed his name from ${oldUser.username} to ${newUser.username}`);
+    }
+    console.log(`Someone changed their name from ${oldUser.username} to ${newUser.username}`);
 })
 
 function scheduleraid(message) {
